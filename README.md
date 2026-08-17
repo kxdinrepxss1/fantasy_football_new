@@ -111,21 +111,28 @@ node apps/api/dist/server.js       # serve apps/web/dist with any static host
 
 ### Cloudflare Workers + Supabase
 
-`wrangler.toml` is set up. Create a Hyperdrive binding pointing at your Supabase
-connection string — postgres.js talks to Hyperdrive with no code change.
+**Step by step in [docs/DEPLOY.md](docs/DEPLOY.md).** The short version:
 
 ```bash
-npx wrangler hyperdrive create ff-db --connection-string="postgres://..."
-# put the returned id in wrangler.toml
+export DATABASE_URL="<supabase session pooler string>"
+npm run db:migrate
+
+cd apps/api
+npx wrangler hyperdrive create ff-db --connection-string="<supabase DIRECT string>"
+# paste the id into wrangler.toml, set APP_URL to your Pages URL
 npx wrangler secret put JWT_SECRET
-npm run deploy -w @ff/api
+npx wrangler deploy
 ```
 
-Then deploy `apps/web/dist` to Cloudflare Pages and point `VITE_API_URL` at the
-Worker.
+Then point Cloudflare Pages at `apps/web/dist` with `VITE_API_URL` set to the
+Worker URL.
 
-Cost at this size is essentially zero: Workers' free tier covers a league's
-traffic many times over, and Supabase's free tier is far more than enough.
+Note the two different Supabase connection strings: Hyperdrive wants the
+**direct** one (it pools on its own), while migrations from your laptop or CI
+want the **session pooler**, because the direct endpoint is IPv6-only. That
+mismatch is the most common way this deployment fails.
+
+Cost at this size is essentially zero.
 
 ## Design notes
 

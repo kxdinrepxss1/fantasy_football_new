@@ -20,11 +20,28 @@ export function toJson(value: unknown): JSONValue {
  * Workers spin up per request, so the connection pool is kept small and idle
  * connections are closed quickly; under Node the same settings are harmless.
  */
-export function createDb(databaseUrl: string): Db {
+/**
+ * Supavisor (Supabase's pooler) in *transaction* mode hands each query a
+ * different backend connection, so server-side prepared statements — which
+ * postgres.js uses by default — fail with "prepared statement already exists".
+ * Session mode on port 5432 is fine.
+ *
+ * Detecting the transaction port saves a confusing runtime failure for anyone
+ * who copies the pooled string Supabase shows first. Override explicitly with
+ * DATABASE_PREPARE=false if another pooler (PgBouncer, pgcat) is in the way.
+ */
+export function usesTransactionPooler(databaseUrl: string): boolean {
+  return /pooler\.supabase\.com:6543/.test(databaseUrl) || /[?&]pgbouncer=true/.test(databaseUrl);
+}
+
+export function createDb(databaseUrl: string, options: { prepare?: boolean } = {}): Db {
+  const prepare = options.prepare ?? !usesTransactionPooler(databaseUrl);
+
   return postgres(databaseUrl, {
     max: 5,
     idle_timeout: 20,
     connect_timeout: 10,
+    prepare,
     onnotice: () => {},
     transform: { undefined: null },
   });

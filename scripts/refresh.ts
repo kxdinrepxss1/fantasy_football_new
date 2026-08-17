@@ -15,6 +15,7 @@
  * CI job can alert on it.
  */
 import postgres from 'postgres';
+import { usesTransactionPooler } from '../apps/api/dist/db.js';
 import {
   detectValuationDrift,
   toSnapshot,
@@ -31,7 +32,12 @@ const DATABASE_URL =
 const SUSPICIOUS_PCT = Number(process.env.DRIFT_SUSPICIOUS_PCT ?? 60);
 const SIGNIFICANT_PCT = Number(process.env.DRIFT_SIGNIFICANT_PCT ?? 20);
 
-const sql = postgres(DATABASE_URL, { onnotice: () => {} });
+// Prepared statements break through Supabase's transaction pooler; the shared
+// helper works out whether they are safe for this connection string.
+const sql = postgres(DATABASE_URL, {
+  onnotice: () => {},
+  prepare: !usesTransactionPooler(DATABASE_URL),
+});
 
 async function main() {
   if (!process.argv.includes('--skip-sync')) {

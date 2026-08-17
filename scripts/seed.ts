@@ -12,6 +12,7 @@
  * than as noise.
  */
 import postgres from 'postgres';
+import { usesTransactionPooler } from '../apps/api/dist/db.js';
 import {
   defaultLeagueSettings,
   optimizeLineup,
@@ -32,7 +33,12 @@ const WEEKS_PLAYED = 3;
 const TEAM_COUNT = 12;
 const DEMO_PASSWORD = 'password123';
 
-const sql = postgres(DATABASE_URL, { onnotice: () => {} });
+// Prepared statements break through Supabase's transaction pooler; the shared
+// helper works out whether they are safe for this connection string.
+const sql = postgres(DATABASE_URL, {
+  onnotice: () => {},
+  prepare: !usesTransactionPooler(DATABASE_URL),
+});
 
 /* -------------------------------------------------------------------------- */
 /* Deterministic randomness                                                   */

@@ -22,7 +22,22 @@ const DATABASE_URL =
 
 const reset = process.argv.includes('--reset');
 
-const sql = postgres(DATABASE_URL, { onnotice: () => {} });
+/**
+ * Duplicated from apps/api/src/db.ts on purpose: migrations have to run on a
+ * fresh clone before anything has been compiled, so this script cannot import
+ * from the API's build output. Keep the two in step.
+ *
+ * Prepared statements fail through Supabase's transaction pooler, which hands
+ * each query a different backend connection.
+ */
+function usesTransactionPooler(url: string): boolean {
+  return /pooler\.supabase\.com:6543/.test(url) || /[?&]pgbouncer=true/.test(url);
+}
+
+const sql = postgres(DATABASE_URL, {
+  onnotice: () => {},
+  prepare: !usesTransactionPooler(DATABASE_URL),
+});
 
 async function main() {
   if (reset) {

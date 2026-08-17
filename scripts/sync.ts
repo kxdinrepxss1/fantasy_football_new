@@ -11,6 +11,7 @@
  * refreshed and surface failures rather than quietly serving stale numbers.
  */
 import postgres from 'postgres';
+import { usesTransactionPooler } from '../apps/api/dist/db.js';
 import type { StatLine } from '@ff/core';
 import {
   fetchPlayers,
@@ -27,7 +28,12 @@ const DATABASE_URL =
 
 const FINAL_REGULAR_SEASON_WEEK = 18;
 
-const sql = postgres(DATABASE_URL, { onnotice: () => {} });
+// Prepared statements break through Supabase's transaction pooler; the shared
+// helper works out whether they are safe for this connection string.
+const sql = postgres(DATABASE_URL, {
+  onnotice: () => {},
+  prepare: !usesTransactionPooler(DATABASE_URL),
+});
 
 type Job = 'players' | 'stats' | 'projections' | 'trending' | 'all';
 

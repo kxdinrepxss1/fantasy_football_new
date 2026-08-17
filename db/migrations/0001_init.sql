@@ -3,7 +3,18 @@
 -- Written for plain Postgres so it works on Supabase, a local cluster, or any
 -- managed Postgres. No Supabase-specific extensions are required.
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- gen_random_uuid() is core Postgres from version 13 onward, so no extension is
+-- required on any currently supported server. This block is only a fallback for
+-- older installs, and it tolerates failure because managed hosts (Supabase among
+-- them) often restrict CREATE EXTENSION to a specific schema or to superusers —
+-- in which case the function is already present anyway.
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS pgcrypto;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'Skipping pgcrypto (%). gen_random_uuid() is built in on Postgres 13+.', SQLERRM;
+END
+$$;
 
 /* -------------------------------------------------------------------------- */
 /* Accounts                                                                   */

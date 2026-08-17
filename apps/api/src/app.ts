@@ -31,7 +31,35 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions = {}): App {
   const app = new Hono<{ Variables: Variables }>();
 
-  app.use('*', cors({ origin: (origin) => origin ?? '*', credentials: true }));
+  /**
+   * CORS.
+   *
+   * The session token travels in an Authorization header rather than a cookie,
+   * so credentialed CORS is not needed and reflecting arbitrary origins would
+   * only widen the surface. Allowed origins come from ALLOWED_ORIGINS (comma
+   * separated) or fall back to APP_URL. During local development, when APP_URL
+   * is still a localhost address, any origin is allowed so a phone on the same
+   * network can reach the dev server by IP.
+   */
+  app.use('*', async (c, next) => {
+    const env = readEnv(options.envSource ?? (c.env as Record<string, unknown>) ?? process.env);
+    const configured = (env.ALLOWED_ORIGINS ?? env.APP_URL)
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const isLocalDev = configured.every((value) => /localhost|127\.0\.0\.1/.test(value));
+
+    return cors({
+      origin: (origin) => {
+        if (!origin) return origin;
+        if (isLocalDev) return origin;
+        return configured.includes(origin) ? origin : null;
+      },
+      allowHeaders: ['Content-Type', 'Authorization'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      maxAge: 86400,
+    })(c, next);
+  });
 
   app.use('*', async (c, next) => {
     const env = readEnv(options.envSource ?? (c.env as Record<string, unknown>) ?? process.env);
