@@ -1,0 +1,30 @@
+{
+  "name": "fantasy-football-new",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @ff/core && npm run build -w @ff/api && npm run build -w @ff/web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --pretty false",
+    "dev": "npm run dev -w @ff/api & npm run dev -w @ff/web",
+    "dev:api": "npm run dev -w @ff/api",
+    "dev:web": "npm run dev -w @ff/web",
+    "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "db:seed": "node --experimental-strip-types scripts/seed.ts",
+    "db:reset": "node --experimental-strip-types scripts/migrate.ts --reset && npm run db:seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
