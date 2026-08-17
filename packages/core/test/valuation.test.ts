@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultLeagueSettings } from '../src/scoring/presets.js';
 import { rawAgeMultiplier } from '../src/valuation/ageCurves.js';
 import { computeReplacementLevels, buildPositionCurves } from '../src/valuation/replacement.js';
-import { buildValuationContext, valuePool, valuePoolAsMap } from '../src/valuation/value.js';
+import { buildValuationContext, valuePlayer, valuePool, valuePoolAsMap } from '../src/valuation/value.js';
 import { buildPool, input } from './fixtures.js';
 
 describe('aging curves', () => {
@@ -126,6 +126,49 @@ describe('player value', () => {
     const max = Math.max(...values.map((v) => v.score));
     expect(max).toBe(100);
     expect(Math.min(...values.map((v) => v.score))).toBeGreaterThanOrEqual(0);
+  });
+
+  it('keeps deeply sub-replacement players ordered instead of flattening them to zero', () => {
+    // In a one-QB league the replacement quarterback is genuinely good, so every
+    // backup sits well below him. They must still be distinguishable.
+    const pool = buildPool(12);
+    const ctx0 = buildValuationContext(pool, settings);
+    const replacement = ctx0.replacement.replacementPoints.QB;
+
+    // Realistic backups: a couple of points below the replacement starter, which
+    // is where the old hard clamp flattened a whole tier to exactly zero.
+    const backups = [
+      input('QB', replacement - 1.5, { id: 'qb-better', name: 'Better Backup' }),
+      input('QB', replacement - 2.5, { id: 'qb-worse', name: 'Worse Backup' }),
+      input('QB', replacement - 3.5, { id: 'qb-worst', name: 'Worst Backup' }),
+    ];
+    const full = [...pool, ...backups];
+    const values = valuePoolAsMap(full, buildValuationContext(full, settings));
+
+    const better = values.get('qb-better')!;
+    const worse = values.get('qb-worse')!;
+    const worst = values.get('qb-worst')!;
+
+    // All three are below replacement…
+    expect(better.vorpPerGame).toBeLessThan(0);
+    expect(worst.vorpPerGame).toBeLessThan(0);
+    // …but none is zero, and the ordering survives.
+    expect(worst.value).toBeGreaterThan(0);
+    expect(better.value).toBeGreaterThan(worse.value);
+    expect(worse.value).toBeGreaterThan(worst.value);
+  });
+
+  it('joins the sub-replacement curve smoothly at replacement level', () => {
+    // A player exactly at replacement and one a hair above should not jump.
+    const pool = buildPool(12);
+    const ctx = buildValuationContext(pool, settings);
+    const replacement = ctx.replacement.replacementPoints.WR;
+
+    const at = valuePlayer(input('WR', replacement, { id: 'at' }), ctx);
+    const justBelow = valuePlayer(input('WR', replacement - 0.01, { id: 'below' }), ctx);
+
+    expect(at.baseValue).toBeGreaterThan(justBelow.baseValue);
+    expect(at.baseValue - justBelow.baseValue).toBeLessThan(1);
   });
 
   it('explains itself in plain language', () => {

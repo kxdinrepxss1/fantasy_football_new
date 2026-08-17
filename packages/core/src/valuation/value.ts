@@ -19,7 +19,7 @@ const SCARCITY_WEIGHT = 0.18;
 const SCARCITY_WINDOW = 4;
 
 /**
- * Points-per-game cushion added to every player's value over replacement.
+ * Points-per-game cushion applied to value over replacement.
  *
  * Sub-replacement players are not worthless — they hold a bench spot and get
  * started on bye weeks — so without a cushion everyone below the starter cutoff
@@ -29,10 +29,30 @@ const SCARCITY_WINDOW = 4;
  * player's own scoring. A fraction would quietly favour whichever positions
  * happen to score more in raw terms: a streamable defense at 6.5 pts/gm would
  * outrank a comparable receiver at 4.5 even though both sit the same distance
- * below their own replacement level. Adding a flat cushion to VORP keeps the
+ * below their own replacement level. Applying the cushion to VORP keeps the
  * comparison in the one unit that is already position-neutral.
  */
 const BENCH_FLOOR_PPG = 1.5;
+
+/**
+ * Turn value over replacement into a strictly positive, strictly increasing
+ * quantity.
+ *
+ * Above replacement this is just VORP plus the cushion. Below it, the curve
+ * decays exponentially toward zero instead of being clipped at it. Clipping
+ * looked fine until a real player pool went through it: in a one-quarterback
+ * league the replacement quarterback is good, so every backup lands several
+ * points below him, hits the clamp, and a whole tier of players shows up as
+ * exactly zero — indistinguishable from each other and from a player who
+ * genuinely has no value. The exponential keeps them ordered however deep they
+ * are, and joins the linear part smoothly at replacement level (both the value
+ * and its slope match at VORP = 0).
+ */
+function cushionedVorp(vorpPerGame: number): number {
+  return vorpPerGame >= 0
+    ? vorpPerGame + BENCH_FLOOR_PPG
+    : BENCH_FLOOR_PPG * Math.exp(vorpPerGame / BENCH_FLOOR_PPG);
+}
 
 export interface ValuationInput {
   player: Player;
@@ -105,7 +125,7 @@ export function valuePlayer(input: ValuationInput, ctx: ValuationContext): Playe
   const replacementPoints = ctx.replacement.replacementPoints[pos] ?? 0;
   const vorpPerGame = perGame - replacementPoints;
 
-  const baseValue = Math.max(0, vorpPerGame + BENCH_FLOOR_PPG) * gamesRemaining;
+  const baseValue = cushionedVorp(vorpPerGame) * gamesRemaining;
 
   const age = ageMultiplier(pos, player.age, ctx.settings.dynastyWeight);
 
