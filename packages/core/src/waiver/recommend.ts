@@ -103,9 +103,18 @@ export function analyzeRosterNeeds(
     ).length;
     const req = required[pos];
     let severity: RosterNeed['severity'] = 'ok';
-    if (depth < req) severity = 'critical';
-    else if (depth < req + 1) severity = 'thin';
-    else if (depth >= req + 2.5) severity = 'surplus';
+    if (depth < req) {
+      severity = 'critical';
+    } else if (req >= 2 && depth < req + 1) {
+      // Only positions that start more than one player warrant a "carry a
+      // backup" nudge. At kicker and defense — and quarterback outside
+      // superflex — having exactly the required number is how leagues are
+      // actually played, and flagging it as thin pushes streamable defenses to
+      // the top of every waiver list.
+      severity = 'thin';
+    } else if (depth >= req + 2.5) {
+      severity = 'surplus';
+    }
     return { position: pos, depth, required: Math.round(req * 10) / 10, severity };
   });
 }
@@ -261,37 +270,77 @@ export function recommendWaivers(input: WaiverInput, limit = 25): WaiverRecommen
   const byeGaps = uncoveredByeWeeks(roster, settings, currentWeek, lookaheadWeeks);
   const needs = new Map(analyzeRosterNeeds(roster, settings).map((n) => [n.position, n]));
 
-  const recs = available.map((entry): WaiverRecommendation => {
+  /**
+   * How many players at a position should get the "fills a hole" treatment.
+   *
+   * A roster starting three receivers with only one on it needs two more; a
+   * roster whose lone defense is on bye needs exactly one. Boosting every
+   * candidate at the position instead would bury the rest of the wire under
+   * five interchangeable defenses, which is the most common way a waiver list
+   * stops being useful.
+   */
+  const slotsToFill = new Map<Position, number>();
+  for (const need of needs.values()) {
+    const short = Math.max(0, Math.ceil(need.required - need.depth));
+    const byeGap = (byeGaps.get(need.position) ?? []).length > 0 ? 1 : 0;
+    const boostable = Math.max(short, byeGap);
+    if (boostable > 0) slotsToFill.set(need.position, boostable);
+  }
+
+  const scored = available.map((entry) => {
     const value = valuePlayer(entry, ctx);
     const lineupGain = lineupGainFromAdding(candidates, settings.roster, {
       player: entry.player,
       points: entry.perGame,
     });
 
-    const need = needs.get(entry.player.position);
-    const needBoost =
-      need?.severity === 'critical'
-        ? 1.35
-        : need?.severity === 'thin'
-          ? 1.15
-          : need?.severity === 'surplus'
-            ? 0.8
-            : 1;
-
     const gapWeeks = byeGaps.get(entry.player.position) ?? [];
     const coversByeWeeks = gapWeeks.filter((w) => entry.player.byeWeek !== w);
-    const byeBoost = coversByeWeeks.length > 0 ? 1.1 : 1;
-
-    const delta = entry.player.rosteredPctDelta ?? 0;
-    const trending = delta >= TRENDING_DELTA_PCT;
     const opportunity = injuryOpportunity(entry, leagueRostered);
-    const opportunityBoost = opportunity ? 1.2 : 1;
 
     // Lineup impact is what actually wins matchups, so it carries the ranking;
     // market value keeps genuinely good players ahead of marginal streamers who
     // happen to plug a hole this week.
-    const fitScore =
-      (lineupGain * 10 + value.value * 0.35) * needBoost * byeBoost * opportunityBoost;
+    const base = lineupGain * 10 + value.value * 0.35;
+
+    return { entry, value, lineupGain, coversByeWeeks, opportunity, base };
+  });
+
+  // Rank within each position so the players that fill a hole are the best ones
+  // available there, not whoever happens to come first.
+  const rankInPosition = new Map<string, number>();
+  for (const position of POSITIONS) {
+    const inPos = scored
+      .filter((s) => s.entry.player.position === position)
+      .sort((a, b) => b.base - a.base);
+    inPos.forEach((s, i) => rankInPosition.set(s.entry.player.id, i));
+  }
+
+  const recs = scored.map((s): WaiverRecommendation => {
+    const { entry, value, lineupGain, coversByeWeeks, opportunity } = s;
+    const need = needs.get(entry.player.position);
+
+    // Only the players who would actually fill the gap get the boosts.
+    const fillable = slotsToFill.get(entry.player.position) ?? 0;
+    const fillsAHole = (rankInPosition.get(entry.player.id) ?? 0) < fillable;
+
+    const needBoost = !fillsAHole
+      ? need?.severity === 'surplus'
+        ? 0.8
+        : 1
+      : need?.severity === 'critical'
+        ? 1.35
+        : need?.severity === 'thin'
+          ? 1.15
+          : 1;
+
+    const byeBoost = fillsAHole && coversByeWeeks.length > 0 ? 1.1 : 1;
+
+    const delta = entry.player.rosteredPctDelta ?? 0;
+    const trending = delta >= TRENDING_DELTA_PCT;
+    const opportunityBoost = opportunity ? 1.2 : 1;
+
+    const fitScore = s.base * needBoost * byeBoost * opportunityBoost;
 
     const reasons: string[] = [];
     reasons.push(value.reasons[0]!);
@@ -302,8 +351,11 @@ export function recommendWaivers(input: WaiverInput, limit = 25): WaiverRecommen
     }
     if (opportunity) reasons.push(opportunity);
     if (trending) reasons.push(`rostership up ${delta.toFixed(0)} pts this week`);
-    if (coversByeWeeks.length > 0) {
-      reasons.push(`covers your week ${coversByeWeeks.join(', ')} hole at ${entry.player.position}`);
+    // Only claim to cover a bye when this is one of the players that actually
+    // would; the sixth-best defense does not solve anything the first has not.
+    const covers = fillsAHole ? coversByeWeeks : [];
+    if (covers.length > 0) {
+      reasons.push(`covers your week ${covers.join(', ')} hole at ${entry.player.position}`);
     }
 
     return {
@@ -318,7 +370,7 @@ export function recommendWaivers(input: WaiverInput, limit = 25): WaiverRecommen
       trending,
       rosteredPctDelta: delta,
       opportunity,
-      coversByeWeeks,
+      coversByeWeeks: covers,
       dropCandidate: null,
       reasons,
     };
@@ -327,11 +379,11 @@ export function recommendWaivers(input: WaiverInput, limit = 25): WaiverRecommen
   recs.sort((a, b) => b.fitScore - a.fitScore);
   const top = recs.slice(0, limit);
 
-  // Only compute drops for what we actually show — each one runs the optimizer.
+  // The drop suggestion depends only on the roster, so it is computed once and
+  // shared rather than re-running the lineup optimizer for every row.
   const rosterFull = roster.length >= settings.roster.benchSize + countStartingSlots(settings);
-  for (const rec of top) {
-    if (rosterFull) rec.dropCandidate = suggestDrop(roster, settings, ctx);
-  }
+  const drop = rosterFull ? suggestDrop(roster, settings, ctx) : null;
+  for (const rec of top) rec.dropCandidate = drop;
 
   return top;
 }

@@ -266,7 +266,7 @@ function explain(
   for (const side of [a, b]) {
     if (side.startingLineupSwing !== 0) {
       lines.push(
-        `${side.teamName}'s starting lineup ${side.startingLineupSwing > 0 ? 'gains' : 'loses'} about ${Math.abs(side.startingLineupSwing).toFixed(1)} pts/gm.`,
+        `${possessive(side.teamName)} starting lineup ${side.startingLineupSwing > 0 ? 'gains' : 'loses'} about ${Math.abs(side.startingLineupSwing).toFixed(1)} pts/gm.`,
       );
     }
   }
@@ -294,6 +294,11 @@ function explain(
   }
 
   return lines;
+}
+
+/** Team names are user-supplied and very often end in s ("Gophers"). */
+function possessive(name: string): string {
+  return name.endsWith('s') ? `${name}'` : `${name}'s`;
 }
 
 function sum(ns: number[]): number {

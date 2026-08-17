@@ -1,0 +1,19 @@
+{
+  "name": "@ff/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "build": "tsc -b",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ff/core": "*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  }
+}

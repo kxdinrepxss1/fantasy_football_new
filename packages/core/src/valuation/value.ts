@@ -19,11 +19,20 @@ const SCARCITY_WEIGHT = 0.18;
 const SCARCITY_WINDOW = 4;
 
 /**
- * Sub-replacement players still have value — they occupy a bench spot and can be
- * started in a bye week. This keeps their ordering sensible instead of flattening
- * everyone below the starter cutoff to zero.
+ * Points-per-game cushion added to every player's value over replacement.
+ *
+ * Sub-replacement players are not worthless — they hold a bench spot and get
+ * started on bye weeks — so without a cushion everyone below the starter cutoff
+ * collapses to zero and loses all ordering.
+ *
+ * It is deliberately an absolute number of points rather than a fraction of a
+ * player's own scoring. A fraction would quietly favour whichever positions
+ * happen to score more in raw terms: a streamable defense at 6.5 pts/gm would
+ * outrank a comparable receiver at 4.5 even though both sit the same distance
+ * below their own replacement level. Adding a flat cushion to VORP keeps the
+ * comparison in the one unit that is already position-neutral.
  */
-const BENCH_FLOOR_WEIGHT = 0.12;
+const BENCH_FLOOR_PPG = 1.5;
 
 export interface ValuationInput {
   player: Player;
@@ -96,8 +105,7 @@ export function valuePlayer(input: ValuationInput, ctx: ValuationContext): Playe
   const replacementPoints = ctx.replacement.replacementPoints[pos] ?? 0;
   const vorpPerGame = perGame - replacementPoints;
 
-  const baseValue =
-    (Math.max(vorpPerGame, 0) + BENCH_FLOOR_WEIGHT * Math.max(perGame, 0)) * gamesRemaining;
+  const baseValue = Math.max(0, vorpPerGame + BENCH_FLOOR_PPG) * gamesRemaining;
 
   const age = ageMultiplier(pos, player.age, ctx.settings.dynastyWeight);
 

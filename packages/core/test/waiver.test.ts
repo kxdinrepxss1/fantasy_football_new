@@ -98,6 +98,59 @@ describe('waiver recommendations', () => {
     expect(trending[0]!.delta).toBe(18);
   });
 
+  it('boosts only as many players as it takes to fill the hole', () => {
+    // One defense, on bye in week 5 — the roster needs exactly one more, not five.
+    const roster = [
+      input('QB', 18, { id: 'qb' }),
+      input('RB', 15, { id: 'rb1' }),
+      input('RB', 14, { id: 'rb2' }),
+      input('WR', 14, { id: 'wr1' }),
+      input('WR', 13, { id: 'wr2' }),
+      input('WR', 12, { id: 'wr3' }),
+      input('TE', 9, { id: 'te1' }),
+      input('DST', 8, { id: 'dst1', byeWeek: 5 }),
+    ];
+    const available = [
+      input('DST', 7.5, { id: 'dst-a', name: 'Best DST', byeWeek: 11 }),
+      input('DST', 7.4, { id: 'dst-b', name: 'Second DST', byeWeek: 11 }),
+      input('DST', 7.3, { id: 'dst-c', name: 'Third DST', byeWeek: 11 }),
+    ];
+    const recs = recommendWaivers({
+      roster,
+      available,
+      settings,
+      ctx,
+      currentWeek: 4,
+      lookaheadWeeks: 4,
+    });
+
+    // Only the best one is credited with solving the week 5 problem.
+    expect(recs.find((r) => r.playerId === 'dst-a')!.coversByeWeeks).toContain(5);
+    expect(recs.find((r) => r.playerId === 'dst-b')!.coversByeWeeks).toEqual([]);
+    expect(recs.find((r) => r.playerId === 'dst-c')!.coversByeWeeks).toEqual([]);
+  });
+
+  it('boosts several players when the roster is short by more than one', () => {
+    // No receivers at all in a league that starts three of them.
+    const roster = [
+      input('QB', 18, { id: 'qb' }),
+      input('RB', 15, { id: 'rb1' }),
+      input('TE', 9, { id: 'te1' }),
+    ];
+    const available = [
+      input('WR', 11, { id: 'wr-a', name: 'WR A' }),
+      input('WR', 10, { id: 'wr-b', name: 'WR B' }),
+      input('WR', 9, { id: 'wr-c', name: 'WR C' }),
+      input('WR', 8, { id: 'wr-d', name: 'WR D' }),
+    ];
+    const recs = recommendWaivers({ roster, available, settings, ctx, currentWeek: 1 });
+
+    // Three starting receiver slots are empty, so three adds genuinely help.
+    const boosted = recs.filter((r) => r.coversByeWeeks.length > 0).length;
+    expect(boosted).toBeGreaterThanOrEqual(3);
+    expect(recs[0]!.playerId).toBe('wr-a');
+  });
+
   it('prefers a player who covers an uncovered bye week', () => {
     // Only one TE, and he is on bye in week 5 — the roster cannot field a TE.
     const roster = [
