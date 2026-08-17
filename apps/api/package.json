@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --experimental-strip-types --watch src/server.ts",
-    "start": "node --experimental-strip-types src/server.ts",
+    "// dev": "Compile-and-watch rather than running the .ts directly: Node's type stripping does not remap the .js import specifiers that tsc needs for its own output.",
+    "dev": "tsc -b && (tsc -b --watch --preserveWatchOutput & node --watch --enable-source-maps dist/server.js)",
+    "start": "node --enable-source-maps dist/server.js",
     "build": "tsc -b",
     "deploy": "wrangler deploy"
   },
