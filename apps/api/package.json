@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "// dev": "Compile-and-watch rather than running the .ts directly: Node's type stripping does not remap the .js import specifiers that tsc needs for its own output.",
-    "dev": "tsc -b && (tsc -b --watch --preserveWatchOutput & node --watch --enable-source-maps dist/server.js)",
+    "// dev": "Compile-and-watch rather than running the .ts directly: Node type stripping does not remap the .js import specifiers tsc needs in its own output. concurrently is used instead of a shell & so this works on Windows, where npm runs scripts through cmd.exe.",
+    "dev": "tsc -b && concurrently -n tsc,server -c gray,cyan \"tsc -b --watch --preserveWatchOutput\" \"node --watch --enable-source-maps dist/server.js\"",
     "start": "node --enable-source-maps dist/server.js",
     "build": "tsc -b",
     "deploy": "wrangler deploy"

@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --pretty false && npm run typecheck -w @ff/web",
-    "dev": "npm run dev -w @ff/api & npm run dev -w @ff/web",
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm run dev -w @ff/api",
     "dev:web": "npm run dev -w @ff/web",
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "concurrently": "^10.0.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
