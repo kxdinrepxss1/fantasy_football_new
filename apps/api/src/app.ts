@@ -75,7 +75,43 @@ export function createApp(options: CreateAppOptions = {}): App {
     await next();
   });
 
+  /**
+   * Cheap liveness check. Deliberately does not touch the database, so an
+   * uptime monitor hitting it every minute costs nothing and a database blip
+   * does not read as the whole service being down.
+   */
   app.get('/health', (c) => c.json({ ok: true, service: 'ff-api' }));
+
+  /**
+   * Readiness check: actually queries the database.
+   *
+   * This is what confirms a deployment is wired up — that the connection
+   * resolves, that credentials work, and whether the query went through a
+   * Hyperdrive binding or a plain connection string. Returns 503 rather than
+   * 500 on failure so a load balancer or monitor reads it as "not ready".
+   */
+  app.get('/health/db', async (c) => {
+    const started = Date.now();
+    try {
+      const [row] = await c.get('db')<Array<{ now: Date }>>`SELECT now() AS now`;
+      return c.json({
+        ok: true,
+        latencyMs: Date.now() - started,
+        viaHyperdrive: c.get('env').VIA_HYPERDRIVE,
+        databaseTime: row?.now ?? null,
+      });
+    } catch (err) {
+      return c.json(
+        {
+          ok: false,
+          latencyMs: Date.now() - started,
+          viaHyperdrive: c.get('env').VIA_HYPERDRIVE,
+          error: scrubConnectionDetails(err),
+        },
+        503,
+      );
+    }
+  });
 
   app.route('/api/auth', authRoutes);
   app.route('/api/leagues', leagueRoutes);
@@ -98,4 +134,17 @@ export function createApp(options: CreateAppOptions = {}): App {
   app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
   return app;
+}
+
+/**
+ * Connection failures love to quote the connection string back at you, password
+ * and all. This endpoint is unauthenticated so that a monitor can reach it,
+ * which means the error text has to be safe to hand to anyone.
+ */
+function scrubConnectionDetails(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message
+    .replace(/postgres(ql)?:\/\/[^\s]*/gi, '<connection string redacted>')
+    .replace(/password[^\s,;]*/gi, '<redacted>')
+    .slice(0, 200);
 }

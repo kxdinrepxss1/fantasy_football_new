@@ -35,7 +35,11 @@ export default {
 
     const app = createApp({
       db,
-      envSource: { ...env, DATABASE_URL: connectionString },
+      envSource: {
+        ...env,
+        DATABASE_URL: connectionString,
+        VIA_HYPERDRIVE: env.HYPERDRIVE ? '1' : '0',
+      },
     });
 
     try {
