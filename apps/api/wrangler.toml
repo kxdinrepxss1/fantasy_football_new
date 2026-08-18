@@ -1,4 +1,7 @@
-name = "ff-api"
+# Must match the Worker this deploys to. wrangler publishes to whatever name is
+# declared here, so a mismatch silently creates a second Worker rather than
+# updating the one you are looking at.
+name = "fantasyflex"
 # Points at compiled output rather than src/worker.ts so the Worker bundle is
 # built by the same tsc invocation that typechecks everything else.
 main = "dist/worker.js"
