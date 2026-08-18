@@ -1,0 +1,65 @@
+name: Database
+
+# Run the database jobs from GitHub rather than a laptop.
+#
+# This exists so the whole app can be set up and operated without installing
+# anything locally: migrations, the demo league, and the first real data pull
+# all run here. Trigger from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'What to run'
+        type: choice
+        required: true
+        default: migrate
+        options:
+          - migrate
+          - seed-demo-league
+          - sync-player-data
+          - reset-everything
+
+concurrency:
+  # Never let two of these write to the same database at once.
+  group: database
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: ${{ inputs.job }}
+        env:
+          # Use the Supabase SESSION POOLER string. Actions runners are IPv4
+          # only, and Supabase's direct endpoint is IPv6 unless you pay for the
+          # IPv4 add-on, so the direct string times out here.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SEASON: ${{ vars.SEASON || '2025' }}
+        run: |
+          set -euo pipefail
+          case "${{ inputs.job }}" in
+            migrate)
+              npm run db:migrate
+              ;;
+            seed-demo-league)
+              npm run db:seed
+              ;;
+            sync-player-data)
+              npm run sync
+              ;;
+            reset-everything)
+              # Drops every table and rebuilds from the migrations. Destructive.
+              npm run db:migrate -- --reset
+              npm run db:migrate
+              ;;
+          esac

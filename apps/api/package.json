@@ -1,0 +1,20 @@
+{
+  "name": "@ff/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "// dev": "Compile-and-watch rather than running the .ts directly: Node type stripping does not remap the .js import specifiers tsc needs in its own output. concurrently is used instead of a shell & so this works on Windows, where npm runs scripts through cmd.exe.",
+    "dev": "tsc -b && concurrently -n tsc,server -c gray,cyan \"tsc -b --watch --preserveWatchOutput\" \"node --watch --enable-source-maps dist/server.js\"",
+    "start": "node --enable-source-maps dist/server.js",
+    "build": "tsc -b",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ff/core": "*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  }
+}

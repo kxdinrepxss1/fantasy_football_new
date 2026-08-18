@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background: #0b1020;
+    color-scheme: dark;
+    /* Stops iOS bumping font sizes when a phone is turned sideways. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-ink-900 text-slate-100 antialiased;
+    /* Room for the fixed bottom nav plus the iOS home indicator. */
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+
+  /* Inputs below 16px make iOS Safari zoom in on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-ink-700 bg-ink-800/70 p-4;
+  }
+
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4
+           text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent-dim text-ink-900 hover:bg-accent;
+  }
+
+  .btn-ghost {
+    @apply btn border border-ink-600 text-slate-200 hover:bg-ink-700;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2.5 text-slate-100
+           placeholder:text-slate-500 focus:border-accent-dim focus:outline-none;
+  }
+
+  .pill {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold;
+  }
+
+  /* Wide tables scroll inside their own box rather than the page. */
+  .scroll-x {
+    @apply -mx-4 overflow-x-auto px-4;
+  }
+}

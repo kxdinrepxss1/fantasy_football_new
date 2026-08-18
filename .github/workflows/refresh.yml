@@ -1,0 +1,53 @@
+name: Refresh player data
+
+# The data refresh does not belong in the Worker: syncing the player dictionary
+# writes thousands of rows and pulls several megabytes, which is well past what
+# a Cron Trigger's CPU budget is meant for. A scheduled Action is free, has no
+# time pressure, and fails loudly.
+on:
+  schedule:
+    # Hourly on game days (Sun/Mon/Thu, UTC) so scores and projections stay live.
+    - cron: '0 * * * 0,1,4'
+    # Once every morning otherwise, to pick up injuries and news.
+    - cron: '30 11 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_sync:
+        description: 'Re-value and verify without pulling new data'
+        type: boolean
+        default: false
+
+concurrency:
+  # Never let two refreshes write to the same database at once.
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync, re-value and verify
+        env:
+          # Use the Supabase session pooler string here — see docs/DEPLOY.md for
+          # why the direct connection usually will not work from CI.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SEASON: ${{ vars.SEASON || '2025' }}
+        run: |
+          if [ "${{ inputs.skip_sync }}" = "true" ]; then
+            npm run refresh -- --skip-sync
+          else
+            npm run refresh
+          fi
+
+      # The refresh exits non-zero when a league fails verification, so a red run
+      # here is the alert that the valuations stopped being trustworthy.

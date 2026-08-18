@@ -1,0 +1,7 @@
+# Cloudflare Pages / Netlify SPA fallback.
+#
+# React Router owns every path below the root. Without this, loading
+# /leagues/<id>/trade directly — or just refreshing the page — asks Pages for a
+# file that does not exist and returns a 404. The 200 status rewrites rather
+# than redirects, so the URL the user sees is preserved.
+/*  /index.html  200
