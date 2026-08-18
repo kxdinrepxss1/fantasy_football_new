@@ -42,7 +42,16 @@ export function createApp(options: CreateAppOptions = {}): App {
    * network can reach the dev server by IP.
    */
   app.use('*', async (c, next) => {
-    const env = readEnv(options.envSource ?? (c.env as Record<string, unknown>) ?? process.env);
+    // This runs before the middleware that reports configuration problems, so
+    // it must not throw on bad config itself — otherwise the clear error never
+    // gets a chance to be returned and the caller sees a generic 500.
+    let env: AppEnv | null = null;
+    try {
+      env = readEnv(options.envSource ?? (c.env as Record<string, unknown>) ?? process.env);
+    } catch {
+      return next();
+    }
+
     const configured = (env.ALLOWED_ORIGINS ?? env.APP_URL)
       .split(',')
       .map((value) => value.trim())
@@ -62,7 +71,30 @@ export function createApp(options: CreateAppOptions = {}): App {
   });
 
   app.use('*', async (c, next) => {
-    const env = readEnv(options.envSource ?? (c.env as Record<string, unknown>) ?? process.env);
+    /**
+     * A missing or malformed setting is a deployment mistake, not a runtime
+     * fault, and it takes down every route including the health checks. Saying
+     * so plainly is worth far more than the generic 500 this used to return —
+     * an operator staring at "Internal server error" on an endpoint that does
+     * not even touch the database has nothing to go on.
+     *
+     * The messages name which setting is wrong and never echo its value, so
+     * this stays safe to expose on an unauthenticated endpoint.
+     */
+    let env: AppEnv;
+    try {
+      env = readEnv(options.envSource ?? (c.env as Record<string, unknown>) ?? process.env);
+    } catch (err) {
+      return c.json(
+        {
+          error: 'Configuration error',
+          detail: err instanceof Error ? err.message : 'Invalid configuration',
+          hint: 'Set the missing value as a Worker secret or environment variable, then redeploy.',
+        },
+        503,
+      );
+    }
+
     c.set('env', env);
     c.set('db', options.db ?? createDb(env.DATABASE_URL));
 
