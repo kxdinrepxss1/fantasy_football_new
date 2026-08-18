@@ -19,12 +19,15 @@ DEV_EMAIL_TO_CONSOLE = "0"
 
 # Hyperdrive pools Postgres connections in front of Supabase, which matters
 # because Workers are per-request and would otherwise open a connection each
-# time. Create one and paste its id here:
-#   npx wrangler hyperdrive create ff-db --connection-string="postgres://..."
+# time.
 #
-# [[hyperdrive]]
-# binding = "HYPERDRIVE"
-# id = "your-hyperdrive-id"
+# This points at Supabase's DIRECT connection string, not the pooler: Hyperdrive
+# does its own pooling, and stacking it on Supavisor double-pools and defeats the
+# caching. The id is not a secret — it names a resource in this Cloudflare
+# account and carries no credentials.
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "94e8888916084f42b75700e6922cd85d"
 
 # JWT_SECRET is a secret, not a var:
 #   npx wrangler secret put JWT_SECRET
