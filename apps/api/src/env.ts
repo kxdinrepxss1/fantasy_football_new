@@ -19,6 +19,12 @@ export interface AppEnv {
   SEASON: number;
   /** Set to '1' to log magic links to the console instead of emailing them. */
   DEV_EMAIL_TO_CONSOLE: boolean;
+  /**
+   * True when the database is reached through a Cloudflare Hyperdrive binding
+   * rather than a plain connection string. Reported by the database health
+   * check so a deployment can be confirmed to be wired up as intended.
+   */
+  VIA_HYPERDRIVE: boolean;
 }
 
 export function readEnv(source: Record<string, unknown>): AppEnv {
@@ -39,6 +45,7 @@ export function readEnv(source: Record<string, unknown>): AppEnv {
     ALLOWED_ORIGINS: str(source.ALLOWED_ORIGINS),
     SEASON: Number(str(source.SEASON) ?? new Date().getFullYear()),
     DEV_EMAIL_TO_CONSOLE: str(source.DEV_EMAIL_TO_CONSOLE) !== '0',
+    VIA_HYPERDRIVE: str(source.VIA_HYPERDRIVE) === '1',
   };
 }
 
